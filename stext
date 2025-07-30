@@ -1,0 +1,60 @@
+### add this to a directory that's setup in your PATH to add a command to run the text editor
+### replace /PATH/TO/cli-text-editor with the path to the cli-text-editor directory
+### requires uv to be installed
+
+#!/usr/bin/env bash
+
+# Get the directory where this script is located (the project directory)
+PROJECT_DIR=PATH/TO/PROJECT/DIR
+
+# Get the current working directory where the script is being called from
+CURRENT_DIR="$(pwd)"
+
+# Initialize variables
+TARGET_DIR="$CURRENT_DIR"
+FILENAME=""
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--directory)
+            # Check if directory argument is provided
+            if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                TARGET_DIR="$2"
+                shift 2
+            else
+                echo "Error: -d/--directory requires a directory path"
+                exit 1
+            fi
+            ;;
+        -*)
+            echo "Error: Unknown option $1"
+            echo "Usage: stext [-d|--directory <directory>] [filename]"
+            exit 1
+            ;;
+        *)
+            # If no directory flag was used and this is the first non-flag argument,
+            # treat it as a filename
+            if [[ -z "$FILENAME" ]]; then
+                FILENAME="$1"
+            else
+                echo "Error: Too many arguments"
+                echo "Usage: stext [-d|--directory <directory>] [filename]"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Change to project directory and run with uv
+cd "$PROJECT_DIR" || exit 1  # Exit if cd fails
+
+# Run the appropriate command based on arguments
+if [[ -n "$FILENAME" ]]; then
+    # Both directory and filename provided
+    uv run app.py "$TARGET_DIR" "$FILENAME"
+else
+    # Only directory provided
+    uv run app.py "$TARGET_DIR"
+fi
