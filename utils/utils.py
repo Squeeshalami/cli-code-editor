@@ -20,7 +20,6 @@ def register_custom_themes(app: App) -> None:
 TEXTAREA_THEME_MAP = {
     "ember": "monokai",
     "hacker-terminal": "monokai", 
-    "monochrome-minimal": "vscode_dark",
     "moonstone": "vscode_dark",
     "dusk-violet": "dracula",
     "textual-dark": "monokai",
@@ -32,7 +31,6 @@ TEXTAREA_THEME_MAP = {
 AVAILABLE_THEMES = [
     "ember",
     "hacker-terminal", 
-    "monochrome-minimal",
     "moonstone",
     "dusk-violet",
     "textual-dark",
