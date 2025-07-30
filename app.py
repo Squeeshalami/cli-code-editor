@@ -10,7 +10,7 @@ from textual.events import Key, Resize
 from textual.css.query import NoMatches
 from textual import work
 
-from utils.utils import LANGUAGE_MAP, TEXTAREA_THEME_MAP, AVAILABLE_THEMES, register_custom_themes
+from utils.utils import LANGUAGE_MAP, TEXTAREA_THEME_MAP, register_custom_themes
 from utils.themes import *
 
 from screens.save_screen import SaveScreen
@@ -69,7 +69,6 @@ class TextEditor(App):
         self.tab_data = {}  # Store TabData objects keyed by tab id
         self.tab_counter = 0  # Counter for unique tab IDs
         self.pending_file_path = None  # Store file path when switching with unsaved changes
-        self.current_theme_index = 0  # For theme cycling
 
     def load_config(self) -> dict:
         """Load configuration from file."""
@@ -94,11 +93,8 @@ class TextEditor(App):
         config = self.load_config()
         saved_theme = config.get('theme', DEFAULT_THEME.name)
         
-        # Ensure the saved theme is valid
-        if saved_theme in AVAILABLE_THEMES:
-            return saved_theme
-        else:
-            return DEFAULT_THEME.name
+        # Return saved theme or default if not found
+        return saved_theme if saved_theme else DEFAULT_THEME.name
 
     def save_current_theme(self) -> None:
         """Save the current theme to config."""
@@ -156,10 +152,6 @@ class TextEditor(App):
         if saved_theme != DEFAULT_THEME.name:
             self.call_after_refresh(lambda: self.notify(f"Loaded saved theme: {saved_theme}"))
         
-        # Initialize theme index for cycling
-        if self.theme in AVAILABLE_THEMES:
-            self.current_theme_index = AVAILABLE_THEMES.index(self.theme)
-        
         if INITIAL_FILE and INITIAL_FILE.exists() and INITIAL_FILE.is_file():
             self.load_file(INITIAL_FILE)
         else:
@@ -170,10 +162,12 @@ class TextEditor(App):
         """Create a welcome tab for when no files are open."""
         tabs = self.query_one(TabbedContent)
         welcome_content = "# Welcome to the Squeeshalami Text Editor\n\n"
+        welcome_content += "# Getting Started:\n\n"
         welcome_content += "Open a file from the directory tree to start editing.\n"
         welcome_content += "Use Ctrl+N to create a new file.\n"
-        welcome_content += "Use Ctrl+T to cycle through themes.\n"
-        welcome_content += "Your theme preference will be remembered between sessions.\n"
+        welcome_content += "Use Ctrl+F to create a new folder.\n"
+        welcome_content += "Use Ctrl+W to close a tab.\n"
+        welcome_content += "Use Ctrl+Q to quit the editor.\n"
         
         editor = TextArea.code_editor(
             text=welcome_content,
