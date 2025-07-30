@@ -27,16 +27,6 @@ TEXTAREA_THEME_MAP = {
     "default": "monokai"
 }
 
-    # Available themes for cycling
-AVAILABLE_THEMES = [
-    "ember",
-    "hacker-terminal", 
-    "moonstone",
-    "dusk-violet",
-    "textual-dark",
-    "textual-light"
-]
-
 LANGUAGE_MAP = {
     ".py":   "python",
     ".js":   "javascript",
