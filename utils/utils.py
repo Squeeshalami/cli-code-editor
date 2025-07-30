@@ -29,7 +29,6 @@ LANGUAGE_MAP = {
     ".cpp":  "cpp",
     ".cs":   "csharp",
     ".csproj": "xml",
-    ".snl":  "snl",
     ".go":   "go",
     ".lua":  "lua",
     ".swift": "swift",

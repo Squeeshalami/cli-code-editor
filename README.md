@@ -234,6 +234,5 @@ The editor provides syntax highlighting for:
 | Godot | `.godot` |
 | Git Config | `.gitignore`, `.gitconfig`, `.gitmodules` |
 | Lock Files | `.lock` |
-| SNL | `.snl` |
 
 *Unsupported file types will open with plain text editing.*
