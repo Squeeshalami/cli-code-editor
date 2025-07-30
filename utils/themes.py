@@ -1,5 +1,10 @@
 from textual.theme import Theme
 
+"""
+This file contains the custom themes for the app. to create a new theme, copy and paste one of the existing themes and modify the values.
+The App will automatically register the new theme when the app is run.
+"""
+
 hacker_terminal = Theme(
     name="hacker-terminal",
     primary="#00cc00",      
@@ -20,29 +25,6 @@ hacker_terminal = Theme(
         "block-cursor-background": "#33CC33",
         "input-selection-background": "#33CC3340",
         "footer-key-foreground": "#33CC33",
-    },
-)
-
-monochrome_minimal = Theme(
-    name="monochrome-minimal",
-    primary="#FFFFFF",      
-    secondary="#EEEEEE",    
-    accent="#CCCCCC",       
-    foreground="#FFFFFF",   
-    background="#000000",   
-    surface="#111111",      
-    panel="#222222",        
-    success="#00FF00",
-    warning="#FFFF00",
-    error="#FF0000",
-    dark=True,
-    variables={
-        "border": "#FFFFFF",
-        "border-blurred": "#444444",
-        "block-cursor-foreground": "#000000",
-        "block-cursor-background": "#FFFFFF",
-        "input-selection-background": "#FFFFFF40",
-        "footer-key-foreground": "#EEEEEE",
     },
 )
 

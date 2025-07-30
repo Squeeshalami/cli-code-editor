@@ -16,6 +16,29 @@ def register_custom_themes(app: App) -> None:
     print(f"Registered {count} custom themes")
 
 
+ # Mapping from app themes to appropriate TextArea themes
+TEXTAREA_THEME_MAP = {
+    "ember": "monokai",
+    "hacker-terminal": "monokai", 
+    "monochrome-minimal": "vscode_dark",
+    "moonstone": "vscode_dark",
+    "dusk-violet": "dracula",
+    "textual-dark": "monokai",
+    "textual-light": "github_light",
+    "default": "monokai"
+}
+
+    # Available themes for cycling
+AVAILABLE_THEMES = [
+    "ember",
+    "hacker-terminal", 
+    "monochrome-minimal",
+    "moonstone",
+    "dusk-violet",
+    "textual-dark",
+    "textual-light"
+]
+
 LANGUAGE_MAP = {
     ".py":   "python",
     ".js":   "javascript",
