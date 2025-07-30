@@ -134,17 +134,6 @@ class TextEditor(App):
         # Save the new theme to config
         self.save_current_theme()
 
-    def cycle_theme(self) -> None:
-        """Cycle to the next available theme."""
-        if self.theme in AVAILABLE_THEMES:
-            self.current_theme_index = AVAILABLE_THEMES.index(self.theme)
-        
-        self.current_theme_index = (self.current_theme_index + 1) % len(AVAILABLE_THEMES)
-        new_theme = AVAILABLE_THEMES[self.current_theme_index]
-        
-        self.theme = new_theme
-        self.notify(f"Theme changed to: {new_theme}")
-
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, time_format="%I:%M %p")
         
@@ -360,7 +349,6 @@ class TextEditor(App):
         ("ctrl+n", "new_file", "New File"),
         ("ctrl+f", "new_folder", "New Folder"),
         ("ctrl+w", "close_tab", "Close Tab"),
-        ("ctrl+t", "cycle_theme", "Cycle Theme"),
         ("delete", "delete_item", "Delete"),
         ]
 
@@ -378,10 +366,6 @@ class TextEditor(App):
         self.update_tab_title(tab_id)  # Update tab title to remove unsaved indicator
         self.update_title()  # Update window title
         self.notify(f"Saved {tab_data.path}")
-
-    def action_cycle_theme(self) -> None:
-        """Cycle to the next theme."""
-        self.cycle_theme()
 
     def action_close_tab(self) -> None:
         """Close the current tab."""
