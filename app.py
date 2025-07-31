@@ -244,6 +244,8 @@ class TextEditor(App):
             self.load_file(initial_file)
         else:
             self.create_welcome_tab()
+            # Ensure directory tree has focus when starting with welcome tab
+            self.call_after_refresh(self._focus_directory_tree_after_welcome)
 
     # Theme management methods
     def get_textarea_theme(self) -> str:
@@ -294,6 +296,11 @@ class TextEditor(App):
         
         tabs.add_pane(TabPane("Welcome", editor, id="welcome"))
 
+    def _focus_directory_tree_after_welcome(self) -> None:
+        """Focus the directory tree after creating welcome tab."""
+        directory_tree = self.query_one(DirectoryTree)
+        directory_tree.focus()
+
     def _get_welcome_content(self) -> str:
         """Generate welcome tab content."""
         return (
@@ -303,7 +310,10 @@ class TextEditor(App):
             "Use Ctrl+N to create a new file.\n"
             "Use Ctrl+F to create a new folder.\n"
             "Use Ctrl+W to close a tab.\n"
-            "Use Ctrl+Q to quit the editor.\n"
+            "Use Ctrl+Q to quit the editor.\n\n"
+            "# Navigation:\n\n"
+            "Use Escape to focus the directory tree.\n"
+            "Use Tab/Shift+Tab to cycle between UI elements.\n"
         )
 
     def update_title(self) -> None:
@@ -420,6 +430,8 @@ class TextEditor(App):
         ("ctrl+f", "new_folder", "New Folder"),
         ("ctrl+w", "close_tab", "Close Tab"),
         ("delete", "delete_item", "Delete"),
+        ("tab", "focus_next", "Focus Next"),
+        ("shift+tab", "focus_previous", "Focus Previous"),
     ]
 
     def action_save(self) -> None:
@@ -465,6 +477,22 @@ class TextEditor(App):
         else:
             self.exit()
 
+    def action_focus_next(self) -> None:
+        """Focus the next widget."""
+        self.screen.focus_next()
+
+    def action_focus_previous(self) -> None:
+        """Focus the previous widget."""
+        self.screen.focus_previous()
+
+    def on_key(self, event: Key) -> None:
+        """Handle key events for global focus management."""
+        if event.key == "escape":
+            # When escape is pressed, focus the directory tree
+            directory_tree = self.query_one(DirectoryTree)
+            directory_tree.focus()
+            event.prevent_default()
+
     # File operation workflows
     @work(exclusive=True)
     async def switch_file_with_confirmation(self) -> None:
@@ -497,6 +525,8 @@ class TextEditor(App):
         
         if not tabs.tab_count:
             self.create_welcome_tab()
+            # Focus the directory tree when all tabs are closed
+            self.call_after_refresh(self._focus_directory_tree_after_welcome)
         
         self.update_title()
 
