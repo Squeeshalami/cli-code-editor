@@ -10,7 +10,15 @@ A modern, terminal-based text editor built with Python and Textual, featuring a 
 - **Create New Folders** - `Ctrl+F` to create folders anywhere in your project
 - **Delete Files/Folders** - `Delete` key with confirmation dialog for safe deletion
 - **Smart File Detection** - Automatic syntax highlighting based on file extensions
+- **Protected File Support** - Automatic read-only mode for files requiring sudo privileges
+- **Large File Handling** - Asynchronous loading for files over 10MB with progress indicators
 - **Global Command Access** - Optional `stext` command for system-wide editor access
+
+### 🔐 **Security & Permissions**
+- **Sudo Support** - Edit protected system files with elevated privileges using `-s` flag
+- **Read-Only Mode** - Automatic detection and safe handling of files without write permissions
+- **Permission Validation** - Real-time checking of file access rights before editing
+- **Visual Indicators** - Clear marking of read-only files in tabs and window title
 
 ### ⌨️ **Keyboard Shortcuts**
 - `Ctrl+S` - Save current file
@@ -141,6 +149,20 @@ stext --directory /path/to/dir filename.py
 ```
 *Opens the editor in the specified directory and loads the specified file*
 
+**Edit protected files with sudo**
+```bash
+stext -s /etc/hosts
+stext --sudo /etc/nginx/nginx.conf
+```
+*Runs the editor with elevated privileges to edit system files that require sudo*
+
+**Combine flags for protected files in specific directories**
+```bash
+stext -s -d /etc/ hosts
+stext --sudo --directory /var/log/ syslog
+```
+*Use sudo privileges to edit files in protected directories*
+
 **Use from any directory**
 ```bash
 cd /any/project/directory
@@ -158,7 +180,10 @@ stext -d ~/docs README.md # Edit README.md in ~/docs
 | `filename` | Open file in current directory | `stext app.py` |
 | `-d DIR` | Open specific directory | `stext -d /path/to/project` |
 | `--directory DIR` | Open specific directory (long form) | `stext --directory /path/to/project` |
+| `-s` | Run with sudo privileges | `stext -s /etc/hosts` |
+| `--sudo` | Run with sudo privileges (long form) | `stext --sudo /etc/nginx/nginx.conf` |
 | `-d DIR filename` | Open file in specific directory | `stext -d ~/project main.py` |
+| `-s -d DIR filename` | Edit protected file in specific directory | `stext -s -d /etc/ hosts` |
 
 #### With UV (if you used Option A)
 
@@ -200,6 +225,7 @@ python app.py /path/to/directory filename.py
 ```
 *Opens the editor in the directory and loads the specified file*
 
+
 ## 🎯 Supported File Types
 
 The editor provides syntax highlighting for:
@@ -236,3 +262,40 @@ The editor provides syntax highlighting for:
 | Lock Files | `.lock` |
 
 *Unsupported file types will open with plain text editing.*
+
+## 🛠️ Troubleshooting
+
+### Common Issues and Solutions
+
+#### "Permission denied" when saving files
+**Problem**: You're trying to edit a system file or file in a protected directory.
+
+**Solution**: Use the sudo flag to run with elevated privileges:
+```bash
+stext -s /etc/hosts
+stext --sudo /path/to/protected/file
+```
+
+#### "File opened in read-only mode"
+**Problem**: The editor detected that you don't have write permissions for the file.
+
+**Solutions**:
+- **For system files**: Use `stext -s filename` to run with sudo
+- **For regular files**: Check file permissions with `ls -la filename`
+- **Change permissions**: `chmod 644 filename` (if you own the file)
+
+#### Large files won't load or editor becomes unresponsive
+**Problem**: File is too large or loading failed.
+
+**Solutions**:
+- **Files 10-100MB**: Should load asynchronously with progress notifications
+- **Files over 100MB**: Not supported - use a specialized tool like `less` or `vim`
+- **Check available memory**: Large files require sufficient RAM
+
+### Getting Help
+
+If you encounter other issues:
+1. Check that all dependencies are installed correctly
+2. Ensure you have the required Python version (3.8+)
+3. Verify file permissions and paths
+4. Try running without the `stext` wrapper: `uv run python app.py`
