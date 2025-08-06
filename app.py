@@ -20,6 +20,8 @@ from screens.delete_screen import DeleteScreen
 
 DEFAULT_THEME = moonstone
 CONFIG_FILE = Path.cwd() / ".editor_config.json"
+LARGE_FILE_THRESHOLD = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB - refuse to load files larger than this
 
 
 class StartupConfig:
@@ -184,12 +186,20 @@ class FileOperations:
             return None
     
     @staticmethod
-    def read_file_content(path: Path) -> str | None:
-        """Read file content, return None if it's a binary file."""
+    def read_file_content(path: Path) -> tuple[str | None, str | None]:
+        """Read file content, return (content, error_message). Content is None if error occurred."""
         try:
-            return path.read_text(encoding="utf‑8")
+            return path.read_text(encoding="utf‑8"), None
         except UnicodeDecodeError:
-            return None
+            return None, "Binary file detected - cannot open in text editor"
+        except PermissionError:
+            return None, f"Permission denied reading '{path.name}'"
+        except MemoryError:
+            return None, f"File '{path.name}' is too large to load into memory"
+        except OSError as e:
+            return None, f"Error reading file '{path.name}': {str(e)}"
+        except Exception as e:
+            return None, f"Unexpected error reading '{path.name}': {str(e)}"
     
     @staticmethod
     def get_language_from_extension(path: Path) -> str | None:
@@ -384,13 +394,54 @@ class TextEditor(App):
         
         # Validate file size
         file_size = FileOperations.check_file_size(path)
-        if file_size and file_size > 10 * 1024 * 1024:  # 10MB
-            self.notify(f"Large file detected ({file_size // 1024 // 1024}MB). Loading may be slow.", severity="warning")
+        if file_size:
+            if file_size > MAX_FILE_SIZE:
+                self.notify(f"File '{path.name}' is too large ({file_size // 1024 // 1024}MB). Maximum supported size is {MAX_FILE_SIZE // 1024 // 1024}MB.", severity="error")
+                return
+            elif file_size > LARGE_FILE_THRESHOLD:
+                self.notify(f"Large file detected ({file_size // 1024 // 1024}MB). Loading may be slow.", severity="warning")
+                # For large files, use async loading
+                self.load_large_file_async(path, file_size)
+                return
+        
+        # For normal files, load synchronously
+        self._load_file_sync(path)
+    
+    @work(exclusive=True)
+    async def load_large_file_async(self, path: Path, file_size: int) -> None:
+        """Load large files asynchronously to prevent UI freezing."""
+        self.notify(f"Loading large file '{path.name}'...", timeout=2)
         
         # Read file content
-        text = FileOperations.read_file_content(path)
+        text, error_message = FileOperations.read_file_content(path)
         if text is None:
-            self.bell()  # binary file
+            self.notify(error_message or "Failed to read file", severity="error")
+            return
+        
+        # Check write permissions
+        has_write_permission = FileOperations.test_write_permission(path)
+        is_read_only = not has_write_permission
+        
+        if is_read_only:
+            self.notify(f"File '{path.name}' opened in read-only mode. Sudo privileges required for editing.", severity="warning")
+        
+        # Create editor and tab
+        editor = self._create_file_editor(path, text, is_read_only)
+        tab_id = self.tab_manager.create_tab_data(path, text, editor, is_read_only)
+        
+        self._add_tab_to_ui(tab_id, path, editor)
+        self._cleanup_welcome_tab()
+        
+        editor.focus()
+        self.update_title()
+        self.notify(f"Successfully loaded '{path.name}' ({file_size // 1024 // 1024}MB)")
+    
+    def _load_file_sync(self, path: Path) -> None:
+        """Load normal-sized files synchronously."""
+        # Read file content
+        text, error_message = FileOperations.read_file_content(path)
+        if text is None:
+            self.notify(error_message or "Failed to read file", severity="error")
             return
         
         # Check write permissions
