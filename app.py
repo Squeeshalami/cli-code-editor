@@ -88,11 +88,12 @@ class ConfigManager:
 
 class TabData:
     """Class to store data for each tab."""
-    def __init__(self, path: Path, content: str, editor: TextArea):
+    def __init__(self, path: Path, content: str, editor: TextArea, is_read_only: bool = False):
         self.path = path
         self.original_content = content
         self.editor = editor
         self.is_modified = False
+        self.is_read_only = is_read_only
 
 
 class TabManager:
@@ -127,7 +128,7 @@ class TabManager:
         return any(self.has_unsaved_changes(tab_id) for tab_id in self.tab_data)
     
     def update_tab_title(self, tab_id: str) -> None:
-        """Update a tab's title to show unsaved changes indicator."""
+        """Update a tab's title to show unsaved changes and read-only indicators."""
         if tab_id not in self.tab_data:
             return
         
@@ -138,7 +139,10 @@ class TabManager:
         
         tab_pane = tabs.get_pane(tab_id)
         if tab_pane:
-            tab_pane.label = f"{filename} *" if has_changes else filename
+            if tab_data.is_read_only:
+                tab_pane.label = f"{filename} [RO]"
+            else:
+                tab_pane.label = f"{filename} *" if has_changes else filename
     
     def find_tab_by_path(self, file_path: Path) -> str | None:
         """Find if a file is already open in a tab."""
@@ -147,10 +151,10 @@ class TabManager:
                 return tab_id
         return None
     
-    def create_tab_data(self, path: Path, content: str, editor: TextArea) -> str:
+    def create_tab_data(self, path: Path, content: str, editor: TextArea, is_read_only: bool = False) -> str:
         """Create new tab data and return the tab ID."""
         tab_id = self.get_next_tab_id()
-        self.tab_data[tab_id] = TabData(path, content, editor)
+        self.tab_data[tab_id] = TabData(path, content, editor, is_read_only)
         return tab_id
     
     def remove_tab_data(self, tab_id: str) -> None:
@@ -192,6 +196,37 @@ class FileOperations:
         """Get syntax highlighting language from file extension."""
         file_extension = path.suffix.lower()
         return LANGUAGE_MAP.get(file_extension, None)
+    
+    @staticmethod
+    def check_write_permission(path: Path) -> bool:
+        """Check if we have write permission to a file."""
+        try:
+            # If file exists, check if we can write to it
+            if path.exists():
+                return path.stat().st_mode & 0o200 != 0 and path.parent.stat().st_mode & 0o200 != 0
+            else:
+                # If file doesn't exist, check if we can write to the parent directory
+                return path.parent.stat().st_mode & 0o200 != 0
+        except (OSError, PermissionError):
+            return False
+    
+    @staticmethod
+    def test_write_permission(path: Path) -> bool:
+        """Test write permission by attempting to open the file for writing."""
+        try:
+            if path.exists():
+                # Try to open existing file in append mode (doesn't modify content)
+                with path.open('a', encoding='utf-8'):
+                    pass
+                return True
+            else:
+                # Try to create and immediately delete a test file
+                test_path = path.parent / f".write_test_{path.name}"
+                test_path.write_text("", encoding='utf-8')
+                test_path.unlink()
+                return True
+        except (OSError, PermissionError):
+            return False
 
 
 class TextEditor(App):
@@ -313,7 +348,11 @@ class TextEditor(App):
             "Use Ctrl+Q to quit the editor.\n\n"
             "# Navigation:\n\n"
             "Use Escape to focus the directory tree.\n"
-            "Use Tab/Shift+Tab to cycle between UI elements.\n"
+            "Use Tab/Shift+Tab to cycle between UI elements.\n\n"
+            "# Editing Protected Files:\n\n"
+            "Files requiring sudo privileges will open in read-only mode.\n"
+            "To edit protected files, run: stext -s [filename]\n"
+            "This will prompt for your password and run with elevated privileges.\n"
         )
 
     def update_title(self) -> None:
@@ -323,7 +362,10 @@ class TextEditor(App):
             tab_data = self.tab_manager.tab_data[tabs.active_pane.id]
             filename = tab_data.path.name
             has_changes = self.tab_manager.has_unsaved_changes(tabs.active_pane.id)
-            if has_changes:
+            
+            if tab_data.is_read_only:
+                self.title = f"Squeeshalami Text Editor - {filename} [Read-Only]"
+            elif has_changes:
                 self.title = f"Squeeshalami Text Editor - {filename} *"
             else:
                 self.title = f"Squeeshalami Text Editor - {filename}"
@@ -351,9 +393,16 @@ class TextEditor(App):
             self.bell()  # binary file
             return
         
+        # Check write permissions
+        has_write_permission = FileOperations.test_write_permission(path)
+        is_read_only = not has_write_permission
+        
+        if is_read_only:
+            self.notify(f"File '{path.name}' opened in read-only mode. Sudo privileges required for editing.", severity="warning")
+        
         # Create editor and tab
-        editor = self._create_file_editor(path, text)
-        tab_id = self.tab_manager.create_tab_data(path, text, editor)
+        editor = self._create_file_editor(path, text, is_read_only)
+        tab_id = self.tab_manager.create_tab_data(path, text, editor, is_read_only)
         
         self._add_tab_to_ui(tab_id, path, editor)
         self._cleanup_welcome_tab()
@@ -361,7 +410,7 @@ class TextEditor(App):
         editor.focus()
         self.update_title()
 
-    def _create_file_editor(self, path: Path, text: str) -> TextArea:
+    def _create_file_editor(self, path: Path, text: str, is_read_only: bool = False) -> TextArea:
         """Create a TextArea editor for a file."""
         language = FileOperations.get_language_from_extension(path)
         return TextArea.code_editor(
@@ -370,6 +419,7 @@ class TextEditor(App):
             theme=self.get_textarea_theme(),
             show_line_numbers=True,
             soft_wrap=False,
+            read_only=is_read_only,
         )
 
     def _add_tab_to_ui(self, tab_id: str, path: Path, editor: TextArea) -> None:
@@ -443,11 +493,27 @@ class TextEditor(App):
         tab_id = tabs.active_pane.id
         tab_data = self.tab_manager.tab_data[tab_id]
         
-        tab_data.path.write_text(tab_data.editor.text, encoding="utf‑8")
-        tab_data.original_content = tab_data.editor.text
-        self.tab_manager.update_tab_title(tab_id)
-        self.update_title()
-        self.notify(f"Saved {tab_data.path}")
+        # Check if file is read-only
+        if tab_data.is_read_only:
+            self.notify(
+                f"Cannot save '{tab_data.path.name}' - file is read-only. "
+                f"Run with 'stext -s' for sudo privileges to edit this file.",
+                severity="error"
+            )
+            return
+        
+        try:
+            tab_data.path.write_text(tab_data.editor.text, encoding="utf‑8")
+            tab_data.original_content = tab_data.editor.text
+            self.tab_manager.update_tab_title(tab_id)
+            self.update_title()
+            self.notify(f"Saved {tab_data.path}")
+        except PermissionError:
+            self.notify(
+                f"Permission denied saving '{tab_data.path.name}'. "
+                f"Run with 'stext -s' for sudo privileges to edit this file.",
+                severity="error"
+            )
 
     def action_close_tab(self) -> None:
         """Close the current tab."""
