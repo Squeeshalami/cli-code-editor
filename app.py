@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+from dataclasses import dataclass
 import sys
 import shutil
 import json
@@ -89,14 +90,13 @@ class ConfigManager:
         self.save_config(config)
 
 
+@dataclass
 class TabData:
-    """Class to store data for each tab."""
-    def __init__(self, path: Path, content: str, editor: TextArea, is_read_only: bool = False):
-        self.path = path
-        self.original_content = content
-        self.editor = editor
-        self.is_modified = False
-        self.is_read_only = is_read_only
+    """Data for each open tab."""
+    path: Path
+    original_content: str
+    editor: TextArea
+    is_read_only: bool = False
 
 
 class TabManager:
@@ -190,7 +190,7 @@ class FileOperations:
     def read_file_content(path: Path) -> tuple[str | None, str | None]:
         """Read file content, return (content, error_message). Content is None if error occurred."""
         try:
-            return path.read_text(encoding="utf‑8"), None
+            return path.read_text(encoding="utf-8"), None
         except UnicodeDecodeError:
             return None, "Binary file detected - cannot open in text editor"
         except PermissionError:
@@ -286,12 +286,36 @@ class TextEditor(App):
     def _load_initial_content(self) -> None:
         """Load initial file or create welcome tab."""
         initial_file = self.startup_config.initial_file
-        if initial_file and initial_file.exists() and initial_file.is_file():
-            self.load_file(initial_file)
-        else:
-            self.create_welcome_tab()
-            # Ensure directory tree has focus when starting with welcome tab
-            self.call_after_refresh(self._focus_directory_tree_after_welcome)
+        if initial_file:
+            if initial_file.exists() and initial_file.is_file():
+                self.load_file(initial_file)
+                return
+            # If an initial file path was provided but does not exist, create it
+            try:
+                parent_dir = initial_file.parent
+                if parent_dir.exists() and parent_dir.is_dir():
+                    initial_file.write_text("", encoding="utf-8")
+                    self.notify(f"Created {initial_file}")
+                    # Ensure directory tree reflects the new file immediately
+                    try:
+                        directory_tree = self.query_one(DirectoryTree)
+                        directory_tree.reload()
+                    except Exception:
+                        pass
+                    self.load_file(initial_file)
+                    return
+                else:
+                    self.notify(
+                        f"Directory does not exist for '{initial_file}': {parent_dir}",
+                        severity="error",
+                    )
+            except Exception as e:
+                self.notify(f"Error creating file '{initial_file.name}': {str(e)}", severity="error")
+
+        # Fallback to welcome tab when no initial file provided or creation failed
+        self.create_welcome_tab()
+        # Ensure directory tree has focus when starting with welcome tab
+        self.call_after_refresh(self._focus_directory_tree_after_welcome)
 
     # Theme management methods
     def get_textarea_theme(self) -> str:
@@ -427,16 +451,13 @@ class TextEditor(App):
         if is_read_only:
             self.notify(f"File '{path.name}' opened in read-only mode. Sudo privileges required for editing.", severity="warning")
         
-        # Create editor and tab
-        editor = self._create_file_editor(path, text, is_read_only)
-        tab_id = self.tab_manager.create_tab_data(path, text, editor, is_read_only)
-        
-        self._add_tab_to_ui(tab_id, path, editor)
-        self._cleanup_welcome_tab()
-        
-        editor.focus()
-        self.update_title()
-        self.notify(f"Successfully loaded '{path.name}' ({file_size // 1024 // 1024}MB)")
+        # Use common helper to open the file content in a new tab
+        self._open_text_in_tab(
+            path=path,
+            text=text,
+            is_read_only=is_read_only,
+            success_message=f"Successfully loaded '{path.name}' ({file_size // 1024 // 1024}MB)"
+        )
     
     def _load_file_sync(self, path: Path) -> None:
         """Load normal-sized files synchronously."""
@@ -453,15 +474,27 @@ class TextEditor(App):
         if is_read_only:
             self.notify(f"File '{path.name}' opened in read-only mode. Sudo privileges required for editing.", severity="warning")
         
-        # Create editor and tab
+        # Use common helper to open the file content in a new tab
+        self._open_text_in_tab(path=path, text=text, is_read_only=is_read_only)
+
+    def _open_text_in_tab(
+        self,
+        path: Path,
+        text: str,
+        is_read_only: bool,
+        success_message: str | None = None,
+    ) -> None:
+        """Create editor and tab, add to UI, focus it, and optionally notify."""
         editor = self._create_file_editor(path, text, is_read_only)
         tab_id = self.tab_manager.create_tab_data(path, text, editor, is_read_only)
-        
         self._add_tab_to_ui(tab_id, path, editor)
         self._cleanup_welcome_tab()
-        
         editor.focus()
+        # Ensure tab label reflects read-only state immediately
+        self.tab_manager.update_tab_title(tab_id)
         self.update_title()
+        if success_message:
+            self.notify(success_message)
 
     def _create_file_editor(self, path: Path, text: str, is_read_only: bool = False) -> TextArea:
         """Create a TextArea editor for a file."""
@@ -557,7 +590,7 @@ class TextEditor(App):
             return
         
         try:
-            tab_data.path.write_text(tab_data.editor.text, encoding="utf‑8")
+            tab_data.path.write_text(tab_data.editor.text, encoding="utf-8")
             tab_data.original_content = tab_data.editor.text
             self.tab_manager.update_tab_title(tab_id)
             self.update_title()

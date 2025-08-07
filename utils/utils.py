@@ -3,6 +3,7 @@ from textual.app import App
 from textual.theme import Theme
 import utils.themes  
 
+
 def register_custom_themes(app: App) -> None:
     """Dynamically finds and registers all Theme instances from the themes module."""
     custom_themes = []
