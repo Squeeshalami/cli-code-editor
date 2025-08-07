@@ -17,6 +17,7 @@ from screens.save_screen import SaveScreen
 from screens.new_file_screen import NewFileScreen
 from screens.new_folder_screen import NewFolderScreen
 from screens.delete_screen import DeleteScreen
+from screens.rename_screen import RenameScreen
 
 DEFAULT_THEME = moonstone
 CONFIG_FILE = Path.cwd() / ".editor_config.json"
@@ -264,7 +265,7 @@ class TextEditor(App):
         yield DirectoryTree(self.startup_config.start_dir)
         
         with TabbedContent():
-            pass  # We'll add tabs dynamically
+            pass
         
         yield Footer()
     
@@ -354,15 +355,16 @@ class TextEditor(App):
             "Open a file from the directory tree to start editing.\n"
             "Use Ctrl+N to create a new file.\n"
             "Use Ctrl+F to create a new folder.\n"
+            "Use Ctrl+R to rename a file or folder.\n"
             "Use Ctrl+W to close a tab.\n"
             "Use Ctrl+Q to quit the editor.\n\n"
             "# Navigation:\n\n"
             "Use Escape to focus the directory tree.\n"
             "Use Tab/Shift+Tab to cycle between UI elements.\n\n"
             "# Editing Protected Files:\n\n"
-            "Files requiring sudo privileges will open in read-only mode.\n"
-            "To edit protected files, run: stext -s [filename]\n"
-            "This will prompt for your password and run with elevated privileges.\n"
+            "Files requiring sudo privileges will open in read-only mode by default.\n"
+            "To edit protected files, run: stext -s[--sudo] [filename]\n"
+            "This will prompt for your password and run the editor with elevated privileges.\n"
         )
 
     def update_title(self) -> None:
@@ -530,6 +532,7 @@ class TextEditor(App):
         ("ctrl+n", "new_file", "New File"),
         ("ctrl+f", "new_folder", "New Folder"),
         ("ctrl+w", "close_tab", "Close Tab"),
+        ("ctrl+r", "rename_item", "Rename"),
         ("delete", "delete_item", "Delete"),
         ("tab", "focus_next", "Focus Next"),
         ("shift+tab", "focus_previous", "Focus Previous"),
@@ -584,6 +587,9 @@ class TextEditor(App):
     
     def action_new_folder(self) -> None:
         self.create_new_folder()
+
+    def action_rename_item(self) -> None:
+        self.rename_selected_item()
     
     def action_delete_item(self) -> None:
         self.delete_selected_item()
@@ -757,6 +763,96 @@ class TextEditor(App):
         except Exception as e:
             self.notify(f"Error deleting {item_name}: {str(e)}", severity="error")
             return False
+
+    @work(exclusive=True)
+    async def rename_selected_item(self) -> None:
+        """Show rename dialog and handle the response."""
+        directory_tree = self.query_one(DirectoryTree)
+        
+        if directory_tree.cursor_node is None:
+            self.notify("No item selected for renaming", severity="warning")
+            return
+        
+        selected_path = Path(directory_tree.cursor_node.data.path)
+        
+        if selected_path == self.startup_config.start_dir:
+            self.notify("Cannot rename the root directory", severity="error")
+            return
+        
+        is_directory = selected_path.is_dir()
+        current_name = selected_path.name
+        
+        result = await self.push_screen_wait(RenameScreen(current_name, is_directory))
+        
+        if result:
+            new_path = selected_path.parent / result
+            if await self._rename_item(selected_path, new_path, is_directory):
+                directory_tree.reload()
+
+    async def _rename_item(self, old_path: Path, new_path: Path, is_directory: bool) -> bool:
+        """Rename an item and update related tabs, return True if successful."""
+        try:
+            # Check if new name already exists
+            if new_path.exists():
+                self.notify(f"'{new_path.name}' already exists!", severity="error")
+                return False
+            
+            # Update tabs before renaming
+            if is_directory:
+                # For directories, update all tabs that are within this directory
+                self._update_tabs_for_directory_rename(old_path, new_path)
+            else:
+                # For files, update the specific tab if it's open
+                self._update_tab_for_file_rename(old_path, new_path)
+            
+            # Perform the rename
+            old_path.rename(new_path)
+            
+            item_type = "folder" if is_directory else "file"
+            self.notify(f"Renamed {item_type}: {old_path.name} → {new_path.name}")
+            return True
+            
+        except Exception as e:
+            self.notify(f"Error renaming {old_path.name}: {str(e)}", severity="error")
+            return False
+
+    def _update_tab_for_file_rename(self, old_path: Path, new_path: Path) -> None:
+        """Update tab data when a file is renamed."""
+        tab_id = self.tab_manager.find_tab_by_path(old_path)
+        if tab_id:
+            # Update the tab data with new path
+            tab_data = self.tab_manager.tab_data[tab_id]
+            tab_data.path = new_path
+            
+            # Update tab title
+            self.tab_manager.update_tab_title(tab_id)
+            
+            # Update window title if this is the active tab
+            tabs = self.query_one(TabbedContent)
+            if tabs.active_pane and tabs.active_pane.id == tab_id:
+                self.update_title()
+
+    def _update_tabs_for_directory_rename(self, old_dir_path: Path, new_dir_path: Path) -> None:
+        """Update all tab data when a directory is renamed."""
+        for tab_id, tab_data in self.tab_manager.tab_data.items():
+            try:
+                # Check if this tab's file is within the renamed directory
+                if old_dir_path in tab_data.path.parents or tab_data.path == old_dir_path:
+                    # Calculate the new path by replacing the old directory part
+                    relative_path = tab_data.path.relative_to(old_dir_path)
+                    new_file_path = new_dir_path / relative_path
+                    
+                    # Update the tab data
+                    tab_data.path = new_file_path
+                    
+                    # Update tab title
+                    self.tab_manager.update_tab_title(tab_id)
+            except ValueError:
+                # relative_to() raises ValueError if path is not relative to old_dir_path
+                continue
+        
+        # Update window title if needed
+        self.update_title()
 
     @work(exclusive=True)
     async def quit_with_confirmation(self) -> None:

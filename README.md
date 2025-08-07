@@ -137,15 +137,13 @@ stext filename.py
 
 **Open specific directory**
 ```bash
-stext -d /path/to/dir
-stext --directory /path/to/dir
+stext /path/to/dir
 ```
 *Opens the editor in the specified directory instead of the current directory*
 
 **Open specific directory with file**
 ```bash
-stext -d /path/to/dir filename.py
-stext --directory /path/to/dir filename.py
+stext /path/to/dir filename.py
 ```
 *Opens the editor in the specified directory and loads the specified file*
 
@@ -156,10 +154,11 @@ stext --sudo /etc/nginx/nginx.conf
 ```
 *Runs the editor with elevated privileges to edit system files that require sudo*
 
-**Combine flags for protected files in specific directories**
+**Combine sudo with directory and file**
 ```bash
-stext -s -d /etc/ hosts
-stext --sudo --directory /var/log/ syslog
+stext -s /etc hosts
+stext --sudo /var/log syslog
+stext -s /etc/nginx/nginx.conf
 ```
 *Use sudo privileges to edit files in protected directories*
 
@@ -167,9 +166,9 @@ stext --sudo --directory /var/log/ syslog
 ```bash
 cd /any/project/directory
 stext                    # Edit files in this directory
-stext main.py           # Edit main.py in this directory
-stext -d ~/other-project # Edit files in ~/other-project
-stext -d ~/docs README.md # Edit README.md in ~/docs
+stext main.py            # Edit main.py in this directory
+stext ~/other-project    # Edit files in ~/other-project
+stext ~/docs README.md   # Edit README.md in ~/docs
 ```
 
 #### stext Command Options
@@ -177,13 +176,10 @@ stext -d ~/docs README.md # Edit README.md in ~/docs
 | Option | Description | Example |
 |--------|-------------|---------|
 | (none) | Open current directory | `stext` |
-| `filename` | Open file in current directory | `stext app.py` |
-| `-d DIR` | Open specific directory | `stext -d /path/to/project` |
-| `--directory DIR` | Open specific directory (long form) | `stext --directory /path/to/project` |
-| `-s` | Run with sudo privileges | `stext -s /etc/hosts` |
-| `--sudo` | Run with sudo privileges (long form) | `stext --sudo /etc/nginx/nginx.conf` |
-| `-d DIR filename` | Open file in specific directory | `stext -d ~/project main.py` |
-| `-s -d DIR filename` | Edit protected file in specific directory | `stext -s -d /etc/ hosts` |
+| `file_path` | Open specific file via a single path | `stext ./src/main.py`, `stext /etc/hosts` |
+| `directory` | Open specific directory | `stext ~/projects/my-app` |
+| `directory filename` | Open file in specific directory | `stext ~/projects/my-app main.py` |
+| `-s` / `--sudo` | Run with sudo privileges (can be first) | `stext -s /etc/hosts`, `stext --sudo /var/log syslog` |
 
 #### With UV (if you used Option A)
 
@@ -202,6 +198,7 @@ uv run python app.py /path/to/your/project
 **Open Specific File**
 ```bash
 uv run python app.py /path/to/directory filename.py
+uv run python app.py /path/to/file              # also supported via stext: `stext /path/to/file`
 ```
 *Opens the editor in the directory and loads the specified file*
 
@@ -222,6 +219,7 @@ python app.py /path/to/your/project
 **Open Specific File**
 ```bash
 python app.py /path/to/directory filename.py
+python app.py /path/to/file                     # also supported via stext: `stext /path/to/file`
 ```
 *Opens the editor in the directory and loads the specified file*
 

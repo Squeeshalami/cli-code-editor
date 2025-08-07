@@ -2,10 +2,11 @@
 ### replace PATH/TO/PROJECT/DIR with the path to the cli-text-editor directory
 ### requires uv to be installed
 ### 
-### Usage: stext [-d|--directory <directory>] [-s|--sudo] [filename]
-### -d, --directory: specify target directory (default: current directory)
+### Usage: stext [-s|--sudo] [directory|file_path] [filename]
 ### -s, --sudo: run with elevated privileges to edit protected files
-### filename: optional file to open directly
+### directory: optional target directory (default: current directory)
+### file_path: optional single argument pointing to a file (e.g. ./dir/file)
+### filename: optional file to open directly when a directory is provided first
 
 #!/usr/bin/env bash
 
@@ -28,49 +29,94 @@ FILENAME=""
 USE_SUDO=false
 
 # Parse command line arguments
+POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -d|--directory)
-            # Check if directory argument is provided
-            if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-                TARGET_DIR="$2"
-                shift 2
-            else
-                echo "Error: -d/--directory requires a directory path"
-                exit 1
-            fi
-            ;;
         -s|--sudo)
             USE_SUDO=true
             shift
             ;;
         -*)
             echo "Error: Unknown option $1"
-            echo "Usage: stext [-d|--directory <directory>] [-s|--sudo] [filename]"
+            echo "Usage: stext [-s|--sudo] [directory|file_path] [filename]"
             exit 1
             ;;
         *)
-            # If no directory flag was used and this is the first non-flag argument,
-            # treat it as a filename
-            if [[ -z "$FILENAME" ]]; then
-                FILENAME="$1"
-            else
-                echo "Error: Too many arguments"
-                echo "Usage: stext [-d|--directory <directory>] [-s|--sudo] [filename]"
-                exit 1
-            fi
+            # Store positional arguments
+            POSITIONAL_ARGS+=("$1")
             shift
             ;;
     esac
 done
+
+# Process positional arguments in order
+if [[ ${#POSITIONAL_ARGS[@]} -gt 0 ]]; then
+    first_arg="${POSITIONAL_ARGS[0]}"
+    # Expand leading ~ for home dir if present
+    if [[ "$first_arg" == ~* ]]; then
+        first_arg="${first_arg/#\~/$HOME}"
+    fi
+
+    if [[ -f "$first_arg" ]]; then
+        # Existing file path provided
+        dir_part="$(dirname -- "$first_arg")"
+        base_part="$(basename -- "$first_arg")"
+        TARGET_DIR="$dir_part"
+        FILENAME="$base_part"
+    elif [[ -d "$first_arg" ]]; then
+        # Existing directory provided → make absolute if needed
+        if [[ "$first_arg" == /* ]]; then
+            TARGET_DIR="$first_arg"
+        else
+            TARGET_DIR="$CURRENT_DIR/$first_arg"
+        fi
+        # Optional second arg is filename
+        if [[ ${#POSITIONAL_ARGS[@]} -gt 1 ]]; then
+            FILENAME="${POSITIONAL_ARGS[1]}"
+        fi
+    else
+        # Treat as a (possibly not-yet-existing) file path
+        dir_part="$(dirname -- "$first_arg")"
+        base_part="$(basename -- "$first_arg")"
+        # Expand ~ in dir part if present
+        if [[ "$dir_part" == ~* ]]; then
+            dir_part="${dir_part/#\~/$HOME}"
+        fi
+        if [[ "$dir_part" == "." ]]; then
+            TARGET_DIR="$CURRENT_DIR"
+        elif [[ "$dir_part" == /* ]]; then
+            TARGET_DIR="$dir_part"
+        else
+            TARGET_DIR="$CURRENT_DIR/$dir_part"
+        fi
+        FILENAME="$base_part"
+        # If a second arg was also provided, it's ambiguous
+        if [[ ${#POSITIONAL_ARGS[@]} -gt 1 ]]; then
+            echo "Error: Too many arguments"
+            echo "Usage: stext [-s|--sudo] [directory|file_path] [filename]"
+            exit 1
+        fi
+    fi
+
+    # Normalize TARGET_DIR if realpath is available (works even if parts don't exist with -m)
+    if command -v realpath >/dev/null 2>&1; then
+        TARGET_DIR="$(realpath -m -- "$TARGET_DIR")"
+    fi
+fi
+
+# Check for too many arguments
+if [[ ${#POSITIONAL_ARGS[@]} -gt 2 ]]; then
+    echo "Error: Too many arguments"
+    echo "Usage: stext [-s|--sudo] [directory|file_path] [filename]"
+    exit 1
+fi
 
 # Change to project directory and run with uv
 cd "$PROJECT_DIR" || exit 1  # Exit if cd fails
 
 # Run the appropriate command based on arguments
 if [[ "$USE_SUDO" == true ]]; then
-    echo "Running text editor with sudo privileges..."
-    echo "You may be prompted for your password."
+    echo "Running editor with sudo privileges..."
     
     if [[ -n "$FILENAME" ]]; then
         # Both directory and filename provided with sudo
