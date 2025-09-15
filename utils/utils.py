@@ -58,7 +58,6 @@ LANGUAGE_MAP = {
     ".jsonl": "jsonl",
     ".gd":   "gdscript",
     ".godot": "godot",
-    ".lock": "lock",
     ".rs":   "rust",
     ".ps1":  "powershell",
     ".psm1": "powershell",
